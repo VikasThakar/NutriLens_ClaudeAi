@@ -1,0 +1,8 @@
+export { authService } from "./auth.service";
+export { userService } from "./user.service";
+export { goalsService } from "./goals.service";
+export { mealsService } from "./meals.service";
+export { historyService } from "./history.service";
+export { analyticsService } from "./analytics.service";
+export { insightsService } from "./insights.service";
+export { apiKeysService } from "./api-keys.service";

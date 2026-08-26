@@ -1,0 +1,676 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "NutriLens Partner API",
+        "description": "**Snap your food. See your nutrition.**\n\nThe NutriLens Partner API turns a meal — either a photograph of one or a\nstructured list of foods — into calories and macronutrients.\n\n## Getting started\n\n1. Create an API key in NutriLens under **Developer → API keys**.\n2. Copy it when it is shown. It is stored only as a hash, so it cannot be\n   displayed again.\n3. Click **Authorize** above, paste the key, and try `GET /api/v1/ping` —\n   it verifies the key without spending an AI call.\n\n## Authentication\n\nSend the key as a bearer token on every request:\n\n```\nAuthorization: Bearer nl_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n`X-API-Key: <key>` is also accepted for clients that reserve the\nAuthorization header.\n\n## Response shape\n\nEvery response — success or failure — uses one of two envelopes:\n\n```json\n{ \"success\": true,  \"data\":  { ... } }\n{ \"success\": false, \"error\": { \"code\": \"INVALID_IMAGE\", \"message\": \"...\" } }\n```\n\nBranch on `error.code`, which is a closed and documented set. Never parse\n`error.message`; it is written for humans and may change.\n\n## Rate limits\n\nLimits are applied per API key, not per IP.\n\n| Endpoint | Per minute | Per day |\n|---|---|---|\n| `POST /nutrition/analyze` | 10 | 250 |\n| `POST /nutrition/estimate` | 30 | 1000 |\n| `GET /ping` | 120 | — |\n\nA `429` response carries a `Retry-After` header.\n\n## These are estimates\n\nNutriLens estimates nutrition; it does not measure it. Values are derived\nfrom a model's reading of a photograph or of a food description, and carry a\ncalibrated `confidence` for exactly that reason. Nothing this API returns is\nmedical or nutritional advice, and it must not be presented to end users as\neither.",
+        "contact": {
+            "name": "NutriLens API support",
+            "email": "api@nutrilens.test"
+        },
+        "license": {
+            "name": "Proprietary"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "This deployment"
+        }
+    ],
+    "paths": {
+        "/api/v1/nutrition/analyze": {
+            "post": {
+                "tags": [
+                    "Nutrition"
+                ],
+                "summary": "Analyse a meal photograph",
+                "description": "Upload a photograph of a meal and receive a nutrition estimate for every\nfood the model can identify: portion, calories, protein, carbohydrates,\nfat, and a calibrated confidence per item.\n\nThe image is re-oriented, downscaled and re-encoded before it is sent to\nthe vision provider, and is **not stored** — partner uploads are held in\nmemory for the duration of the request only.\n\nEvery figure returned is an estimate.",
+                "operationId": "analyzeNutritionImage",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "image"
+                                ],
+                                "properties": {
+                                    "image": {
+                                        "description": "JPEG, PNG or WebP. Max 12 MB, at least 64x64 pixels.",
+                                        "type": "string",
+                                        "format": "binary"
+                                    },
+                                    "reference": {
+                                        "description": "Optional identifier of your own, echoed back in the response.",
+                                        "type": "string",
+                                        "nullable": true,
+                                        "maxLength": 120
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Nutrition analysis",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NutritionSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or revoked API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "413": {
+                        "description": "Upload larger than the server accepts",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Invalid image, unsupported format, or no food detected",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "The AI returned an unusable result",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "AI unavailable or not configured",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/nutrition/estimate": {
+            "post": {
+                "tags": [
+                    "Nutrition"
+                ],
+                "summary": "Estimate nutrition for structured foods",
+                "description": "Send the foods and portions you already know and receive nutrition for\nexactly those foods, in the same order, in the same response shape as the\nimage endpoint.\n\nPortions are echoed back unchanged: the estimate is for the quantity you\nsent, and unit conversion is deliberately not performed on your behalf.\n\nEvery figure returned is an estimate.",
+                "operationId": "estimateNutrition",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/EstimateRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Nutrition estimate",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NutritionSuccess"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or revoked API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ValidationErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "502": {
+                        "description": "The AI returned an unusable result",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "503": {
+                        "description": "AI unavailable or not configured",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/ping": {
+            "get": {
+                "tags": [
+                    "Status"
+                ],
+                "summary": "Verify an API key",
+                "description": "Confirms that your API key is valid and active, and reports the limits\nand accepted portion units for this deployment.\n\nCosts nothing and calls no AI provider — the right first request to make\nwhen setting up an integration.",
+                "operationId": "partnerPing",
+                "responses": {
+                    "200": {
+                        "description": "The key is valid",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "authenticated": {
+                                                    "type": "boolean",
+                                                    "example": true
+                                                },
+                                                "api_version": {
+                                                    "type": "string",
+                                                    "example": "v1"
+                                                },
+                                                "key": {
+                                                    "properties": {
+                                                        "name": {
+                                                            "type": "string",
+                                                            "example": "Acme staging"
+                                                        },
+                                                        "prefix": {
+                                                            "type": "string",
+                                                            "example": "nl_live_a1b2c3"
+                                                        },
+                                                        "created_at": {
+                                                            "type": "string",
+                                                            "format": "date-time"
+                                                        },
+                                                        "last_used_at": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "limits": {
+                                                    "properties": {
+                                                        "analyze_per_minute": {
+                                                            "type": "integer",
+                                                            "example": 10
+                                                        },
+                                                        "analyze_per_day": {
+                                                            "type": "integer",
+                                                            "example": 250
+                                                        },
+                                                        "estimate_per_minute": {
+                                                            "type": "integer",
+                                                            "example": 30
+                                                        },
+                                                        "estimate_per_day": {
+                                                            "type": "integer",
+                                                            "example": 1000
+                                                        },
+                                                        "max_image_megabytes": {
+                                                            "type": "integer",
+                                                            "example": 12
+                                                        },
+                                                        "max_items_per_estimate": {
+                                                            "type": "integer",
+                                                            "example": 20
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "portion_units": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "example": [
+                                                        "g",
+                                                        "ml",
+                                                        "oz",
+                                                        "cup",
+                                                        "slice",
+                                                        "serving"
+                                                    ]
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Missing, invalid or revoked API key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "NutritionItem": {
+                "title": "Nutrition item",
+                "description": "One food, with nutrition for the portion given.",
+                "properties": {
+                    "name": {
+                        "description": "The root of the OpenAPI document: metadata, servers, the API-key security\nscheme, and the schemas shared across partner endpoints.\n\nEndpoint definitions live as attributes on the controllers that implement\nthem, so a route and its documentation cannot drift apart unnoticed.",
+                        "type": "string",
+                        "example": "Grilled chicken breast"
+                    },
+                    "portion_amount": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 150
+                    },
+                    "portion_unit": {
+                        "type": "string",
+                        "example": "g",
+                        "enum": [
+                            "g",
+                            "ml",
+                            "oz",
+                            "fl oz",
+                            "cup",
+                            "tbsp",
+                            "tsp",
+                            "slice",
+                            "piece",
+                            "serving",
+                            "bowl",
+                            "plate"
+                        ]
+                    },
+                    "calories": {
+                        "description": "kcal for this portion.",
+                        "type": "integer",
+                        "example": 248
+                    },
+                    "protein": {
+                        "description": "Grams for this portion.",
+                        "type": "number",
+                        "format": "float",
+                        "example": 46
+                    },
+                    "carbs": {
+                        "description": "Grams for this portion.",
+                        "type": "number",
+                        "format": "float",
+                        "example": 0
+                    },
+                    "fat": {
+                        "description": "Grams for this portion.",
+                        "type": "number",
+                        "format": "float",
+                        "example": 5
+                    },
+                    "confidence": {
+                        "description": "0–1. Below 0.55 means the value should be reviewed before it is relied on.",
+                        "type": "number",
+                        "format": "float",
+                        "example": 0.92
+                    }
+                },
+                "type": "object"
+            },
+            "NutritionTotals": {
+                "title": "Nutrition totals",
+                "description": "The sum of every item. Always consistent with the `items` array.",
+                "properties": {
+                    "calories": {
+                        "type": "integer",
+                        "example": 620
+                    },
+                    "protein": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 48
+                    },
+                    "carbs": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 72
+                    },
+                    "fat": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 14
+                    }
+                },
+                "type": "object"
+            },
+            "NutritionSuccess": {
+                "title": "Nutrition response",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "data": {
+                        "properties": {
+                            "meal_name": {
+                                "type": "string",
+                                "example": "Chicken Rice Bowl"
+                            },
+                            "confidence": {
+                                "description": "Overall confidence, 0–1. Reflects the weakest meaningful part of the analysis rather than the average.",
+                                "type": "number",
+                                "format": "float",
+                                "example": 0.88
+                            },
+                            "totals": {
+                                "$ref": "#/components/schemas/NutritionTotals"
+                            },
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/NutritionItem"
+                                }
+                            },
+                            "notes": {
+                                "description": "One sentence on anything limiting the estimate, or null.",
+                                "type": "string",
+                                "example": null,
+                                "nullable": true
+                            },
+                            "model": {
+                                "properties": {
+                                    "provider": {
+                                        "type": "string",
+                                        "example": "anthropic"
+                                    },
+                                    "name": {
+                                        "type": "string",
+                                        "example": "claude-opus-5"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "disclaimer": {
+                                "type": "string",
+                                "example": "All values are estimates and are not medical or nutritional advice."
+                            },
+                            "reference": {
+                                "description": "Present only if you sent one.",
+                                "type": "string",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "EstimateRequest": {
+                "title": "Structured estimate request",
+                "required": [
+                    "items"
+                ],
+                "properties": {
+                    "meal_name": {
+                        "description": "Optional. Kept verbatim in the response if supplied.",
+                        "type": "string",
+                        "example": "Post-gym lunch",
+                        "nullable": true,
+                        "maxLength": 120
+                    },
+                    "items": {
+                        "description": "One to 20 foods. Results come back in the same order.",
+                        "type": "array",
+                        "items": {
+                            "required": [
+                                "name",
+                                "portion_amount",
+                                "portion_unit"
+                            ],
+                            "properties": {
+                                "name": {
+                                    "type": "string",
+                                    "example": "Chicken breast",
+                                    "maxLength": 120,
+                                    "minLength": 2
+                                },
+                                "brand": {
+                                    "description": "Optional. Lowers confidence if unrecognised rather than being invented.",
+                                    "type": "string",
+                                    "nullable": true,
+                                    "maxLength": 120
+                                },
+                                "portion_amount": {
+                                    "type": "number",
+                                    "format": "float",
+                                    "example": 150
+                                },
+                                "portion_unit": {
+                                    "type": "string",
+                                    "example": "g",
+                                    "enum": [
+                                        "g",
+                                        "ml",
+                                        "oz",
+                                        "fl oz",
+                                        "cup",
+                                        "tbsp",
+                                        "tsp",
+                                        "slice",
+                                        "piece",
+                                        "serving",
+                                        "bowl",
+                                        "plate"
+                                    ]
+                                }
+                            },
+                            "type": "object"
+                        }
+                    }
+                },
+                "type": "object",
+                "example": {
+                    "meal_name": "Post-gym lunch",
+                    "items": [
+                        {
+                            "name": "Chicken breast",
+                            "portion_amount": 150,
+                            "portion_unit": "g"
+                        },
+                        {
+                            "name": "Brown rice",
+                            "portion_amount": 1,
+                            "portion_unit": "cup"
+                        },
+                        {
+                            "name": "Broccoli",
+                            "portion_amount": 90,
+                            "portion_unit": "g"
+                        }
+                    ]
+                }
+            },
+            "ErrorResponse": {
+                "title": "Error",
+                "description": "Every failure uses this shape. Branch on `error.code`.",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "error": {
+                        "properties": {
+                            "code": {
+                                "description": "A closed set:\n\n`MISSING_API_KEY`, `INVALID_API_KEY`, `REVOKED_API_KEY`,\n`EXPIRED_API_KEY`, `FORBIDDEN`, `VALIDATION_FAILED`,\n`INVALID_IMAGE`, `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`,\n`NOT_FOUND`, `RATE_LIMITED`, `NO_FOOD_DETECTED`,\n`AI_UNAVAILABLE`, `AI_NOT_CONFIGURED`, `AI_INVALID_RESPONSE`,\n`INTERNAL_ERROR`.",
+                                "type": "string",
+                                "example": "INVALID_IMAGE"
+                            },
+                            "message": {
+                                "description": "Human-readable. Do not parse.",
+                                "type": "string",
+                                "example": "The uploaded image could not be processed."
+                            },
+                            "details": {
+                                "description": "Field-level context, present on validation failures.",
+                                "type": "object",
+                                "nullable": true,
+                                "additionalProperties": true
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "ValidationErrorResponse": {
+                "title": "Validation error",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "error": {
+                        "properties": {
+                            "code": {
+                                "type": "string",
+                                "example": "VALIDATION_FAILED"
+                            },
+                            "message": {
+                                "type": "string",
+                                "example": "The request could not be validated."
+                            },
+                            "details": {
+                                "type": "object",
+                                "example": {
+                                    "items.0.portion_unit": [
+                                        "`portion_unit` must be one of: g, ml, oz, fl oz, cup, tbsp, tsp, slice, piece, serving, bowl, plate."
+                                    ]
+                                },
+                                "additionalProperties": true
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "http",
+                "description": "Your NutriLens API key, e.g. `nl_live_a1b2c3...`. Paste the key itself — Swagger adds the `Bearer ` prefix.",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Status",
+            "description": "Key verification and API metadata"
+        },
+        {
+            "name": "Nutrition",
+            "description": "Nutrition analysis and estimation"
+        }
+    ]
+}

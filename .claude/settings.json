@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/xampp/mysql/bin/mysql.exe\" -u root -D nutrilens_db -e \"SHOW TABLES;\")",
+      "PowerShell(Write-Output \"=== ROOT ===\"; Get-ChildItem d:\\\\NutriLens_ClaudeAi -Name; Write-Output \"`n=== frontend root \\(excl node_modules/.next\\) ===\"; Get-ChildItem d:\\\\NutriLens_ClaudeAi\\\\frontend -Name | Where-Object { $_ -notin @\\('node_modules','.next'\\) }; Write-Output \"`n=== backend root \\(excl vendor\\) ===\"; Get-ChildItem d:\\\\NutriLens_ClaudeAi\\\\backend -Name -Force | Where-Object { $_ -notin @\\('vendor','node_modules'\\) })",
+      "Bash(\"C:/xampp/mysql/bin/mysql.exe\" -u root -D nutrilens_db -e \"SELECT COUNT\\(*\\) AS tables_created FROM information_schema.tables WHERE table_schema='nutrilens_db'; SELECT COUNT\\(*\\) AS users FROM users; SELECT COUNT\\(*\\) AS goals FROM nutrition_goals; SELECT COUNT\\(*\\) AS migrations_applied FROM migrations;\")",
+      "Bash(curl -s -o /dev/null -w \"GET /api/health -> %{http_code}\\\\n\" http://127.0.0.1:8000/api/health)",
+      "PowerShell(Set-Location d:\\\\NutriLens_ClaudeAi; Write-Output \"=== ROOT ===\"; Get-ChildItem -Name; Write-Output \"`n=== backend app tree ===\"; Get-ChildItem -Recurse backend\\\\app -File | ForEach-Object { $_.FullName.Replace\\(\"$PWD\\\\\",\"\"\\) }; Write-Output \"`n=== migrations ===\"; Get-ChildItem backend\\\\database\\\\migrations -Name)",
+      "PowerShell(Set-Location d:\\\\NutriLens_ClaudeAi; Write-Output \"=== frontend app/components/lib/services tree ===\"; Get-ChildItem -Recurse frontend\\\\app,frontend\\\\components,frontend\\\\lib,frontend\\\\services,frontend\\\\hooks,frontend\\\\types -File | ForEach-Object { $_.FullName.Replace\\(\"$PWD\\\\\",\"\"\\) })",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(xargs cat)",
+      "Bash(grep -nE \"public \\(\\\\?|readonly|\\)?\\\\??\\(int|float|string|array\\)? ?\\\\\\\\\\\\$?\\(timeout|maxRetries|initialRetryDelay\\)\" vendor/anthropic-ai/sdk/src/RequestOptions.php)",
+      "Bash(npx eslint *)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)"
+    ]
+  }
+}
