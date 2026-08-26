@@ -267,6 +267,11 @@ somewhere other than `/app/storage`.
 **Migrations should not run on deploy** — set `RUN_MIGRATIONS=false` on the
 backend service.
 
+**Backend returns 502 `Application failed to respond`** — the domain's target
+port is wrong. `php:8.2-fpm-alpine` inherits `EXPOSE 9000` (php-fpm's FastCGI
+socket), and Railway may pick that over nginx's 8080. Settings → Networking →
+edit the domain → set the port to **8080**.
+
 **A PHP extension is missing** — add it to the `install-php-extensions` line in
 `backend/Dockerfile` and to `require` in `backend/composer.json`, then push.
 Unlike a builder-detected app, nothing here is guessed at deploy time.

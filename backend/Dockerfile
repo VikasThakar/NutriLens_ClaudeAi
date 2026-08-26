@@ -49,7 +49,12 @@ RUN chmod +x /usr/local/bin/entrypoint
 
 RUN chown -R www-data:www-data /app
 
-# Documentation only — the real port is whatever Railway puts in $PORT.
+# php:8.2-fpm-alpine carries an inherited `EXPOSE 9000` for php-fpm's FastCGI
+# socket. A platform that picks its target port from image metadata will route
+# HTTP straight at it, and FastCGI does not speak HTTP — the result is a 502
+# in front of a perfectly healthy container. Declaring PORT makes nginx's port
+# the explicit default; the entrypoint still honours an injected $PORT.
+ENV PORT=8080
 EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
