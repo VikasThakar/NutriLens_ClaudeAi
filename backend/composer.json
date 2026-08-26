@@ -7,6 +7,8 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "ext-exif": "*",
+        "ext-gd": "*",
         "anthropic-ai/sdk": "^0.43.0",
         "darkaonline/l5-swagger": "*",
         "laravel/framework": "^12.0",

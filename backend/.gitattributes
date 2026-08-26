@@ -9,3 +9,7 @@
 /.github export-ignore
 CHANGELOG.md export-ignore
 .styleci.yml export-ignore
+
+# Shell scripts must reach the Linux container with LF endings.
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf

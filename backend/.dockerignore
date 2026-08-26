@@ -1,0 +1,40 @@
+# Keeps the build context small and, more importantly, keeps local secrets and
+# host-built artefacts out of the image.
+
+.git
+.gitignore
+.gitattributes
+.editorconfig
+
+# Reinstalled inside the image against the pinned PHP + extension set. Copying a
+# host-built vendor/ would ship Windows paths and the dev dependencies.
+vendor
+node_modules
+
+# Never bake credentials into an image. Railway supplies these as real
+# environment variables; .env.example stays for documentation.
+.env
+.env.*
+!.env.example
+
+# Recreated by docker/entrypoint.sh on boot, and replaced by the volume anyway.
+storage/app/public/*
+storage/app/private/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+bootstrap/cache/*
+public/storage
+
+# Frontend asset build output — the API serves JSON, and welcome.blade.php
+# already falls back to inline styles when no Vite manifest is present.
+public/build
+public/hot
+
+# Not shipped to production.
+tests
+phpunit.xml
+.phpunit.result.cache
+
+README.md
