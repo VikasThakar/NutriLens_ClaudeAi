@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AiCoachController;
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\ApiKeyController;
 use App\Http\Controllers\Api\AuthController;
@@ -154,5 +155,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/meals/analyze', [MealAnalysisController::class, 'store'])
         ->middleware('throttle:20,1');
 
+    // The NutriLens Tip for one meal. No AI call — see MealTipService.
+    Route::get('/meals/{meal}/tip', [MealController::class, 'tip']);
+
     Route::apiResource('meals', MealController::class);
+
+    /*
+    | AI Coach.
+    |
+    | Reading and managing threads is free, so those routes carry only the
+    | shared per-user limiter. Sending a message is the one action that calls a
+    | provider, so it is throttled separately and far more tightly — see the
+    | `ai-coach` limiter in RateLimitServiceProvider.
+    */
+    Route::prefix('ai-coach')->group(function () {
+        Route::get('/context', [AiCoachController::class, 'context']);
+
+        Route::get('/conversations', [AiCoachController::class, 'index']);
+        Route::post('/conversations', [AiCoachController::class, 'store'])
+            ->middleware('throttle:ai-coach-threads');
+        Route::get('/conversations/{conversation}', [AiCoachController::class, 'show']);
+        Route::delete('/conversations/{conversation}', [AiCoachController::class, 'destroy']);
+
+        Route::post('/conversations/{conversation}/messages', [AiCoachController::class, 'sendMessage'])
+            ->middleware('throttle:ai-coach');
+    });
 });

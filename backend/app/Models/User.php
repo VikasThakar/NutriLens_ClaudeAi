@@ -102,6 +102,12 @@ class User extends Authenticatable
         return $this->hasMany(WeeklyInsight::class);
     }
 
+    /** @return HasMany<AiConversation, $this> */
+    public function aiConversations(): HasMany
+    {
+        return $this->hasMany(AiConversation::class);
+    }
+
     public function hasCompletedOnboarding(): bool
     {
         return $this->onboarded_at !== null;

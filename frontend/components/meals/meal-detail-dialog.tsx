@@ -18,6 +18,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ConfidenceBadge, AiDisclaimer } from "@/components/meals/confidence-badge";
+import { MealTipCard } from "@/components/meals/nutrilens-tip";
 import type { Meal } from "@/types/api";
 
 /**
@@ -133,6 +134,10 @@ function MealDetail({ meal, onClose }: { meal: Meal; onClose: () => void }) {
             ))}
           </div>
         </div>
+
+        {/* How this meal sits against the rest of the day. Computed, not
+            generated — no AI call is made to show it. */}
+        <MealTipCard mealId={meal.id} />
 
         {/* Items */}
         {items.length > 0 && (

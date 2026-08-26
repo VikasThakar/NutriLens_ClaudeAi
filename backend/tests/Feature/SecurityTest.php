@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\AiChatMessage;
+use App\Models\AiConversation;
 use App\Models\ApiKey;
 use App\Models\Meal;
 use App\Models\NutritionGoal;
@@ -55,6 +57,13 @@ class SecurityTest extends TestCase
             ['get', '/api/meals'],
             ['post', '/api/meals'],
             ['post', '/api/meals/analyze'],
+            ['get', '/api/meals/1/tip'],
+            ['get', '/api/ai-coach/context'],
+            ['get', '/api/ai-coach/conversations'],
+            ['post', '/api/ai-coach/conversations'],
+            ['get', '/api/ai-coach/conversations/1'],
+            ['delete', '/api/ai-coach/conversations/1'],
+            ['post', '/api/ai-coach/conversations/1/messages'],
             ['post', '/api/logout'],
         ];
 
@@ -329,9 +338,14 @@ class SecurityTest extends TestCase
         ApiKey::factory()->for($other)->create();
         \App\Models\WeeklyInsight::factory()->for($other)->create();
 
+        AiConversation::factory()->for($other)->create(['title' => 'Their private chat']);
+
         $this->actingAs($user)->getJson('/api/meals')->assertOk()->assertJsonCount(0, 'data');
         $this->actingAs($user)->getJson('/api/api-keys')->assertOk()->assertJsonCount(0, 'data');
         $this->actingAs($user)->getJson('/api/insights')->assertOk()->assertJsonCount(0, 'data');
+        $this->actingAs($user)->getJson('/api/ai-coach/conversations')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
         $this->actingAs($user)->getJson('/api/nutrition-goals')->assertOk()->assertJsonPath('data', null);
         $this->actingAs($user)->getJson('/api/nutrition-goals/history')->assertOk()->assertJsonCount(0, 'data');
         $this->actingAs($user)->getJson('/api/dashboard/today')
@@ -363,5 +377,75 @@ class SecurityTest extends TestCase
         // The meal saves, but without the photo — the image stays with its owner.
         $this->assertSame($owner->id, $image->fresh()->user_id);
         $this->assertNull($image->fresh()->meal_id);
+    }
+
+    /**
+     * A chat message is only ever reachable through its conversation, so the
+     * conversation's owner check is the whole of message-level authorisation.
+     * This asserts that there is no second path to one.
+     */
+    public function test_a_chat_message_is_only_reachable_through_its_own_conversation(): void
+    {
+        config()->set('ai.provider', 'fake');
+
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+
+        $theirs = AiConversation::factory()->for($owner)->create(['title' => 'Their chat']);
+        AiChatMessage::factory()->for($theirs, 'conversation')
+            ->fromUser('Something private about my diet')->create();
+
+        $mine = AiConversation::factory()->for($intruder)->create(['title' => 'My chat']);
+
+        // Reading their thread directly.
+        $this->actingAs($intruder)
+            ->getJson("/api/ai-coach/conversations/{$theirs->id}")
+            ->assertForbidden();
+
+        // Writing into their thread.
+        $this->actingAs($intruder)
+            ->postJson("/api/ai-coach/conversations/{$theirs->id}/messages", ['message' => 'Hello'])
+            ->assertForbidden();
+
+        // Deleting their thread.
+        $this->actingAs($intruder)
+            ->deleteJson("/api/ai-coach/conversations/{$theirs->id}")
+            ->assertForbidden();
+
+        // And their message never appears in a thread of the intruder's own.
+        $this->actingAs($intruder)
+            ->getJson("/api/ai-coach/conversations/{$mine->id}")
+            ->assertOk()
+            ->assertJsonCount(0, 'data.messages')
+            ->assertDontSee('Something private about my diet');
+
+        $this->assertDatabaseHas('ai_conversations', ['id' => $theirs->id]);
+    }
+
+    /**
+     * The coach's context is the one place user data deliberately leaves the
+     * server. It must carry nutrition and nothing else.
+     */
+    public function test_the_ai_coach_context_response_carries_no_identity_or_credentials(): void
+    {
+        config()->set('ai.provider', 'fake');
+
+        $user = User::factory()->create([
+            'name' => 'Grace Hopper',
+            'email' => 'grace@example.test',
+        ]);
+        NutritionGoal::factory()->for($user)->create();
+        Meal::factory()->for($user)->create();
+
+        $body = $this->actingAs($user)->getJson('/api/ai-coach/context')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('grace@example.test', $body);
+        $this->assertStringNotContainsString('Grace Hopper', $body);
+        $this->assertStringNotContainsString($user->password, $body);
+        $this->assertStringNotContainsString('password', $body);
+        $this->assertStringNotContainsString('key', $body);
+        $this->assertStringNotContainsString('token', $body);
     }
 }

@@ -367,6 +367,107 @@ export type GenerateInsightResponse =
     };
 
 /* ---------------------------------------------------------------------------
+   AI Coach
+   --------------------------------------------------------------------------- */
+
+/** One meal as the coach sees it. `date` is present only on past meals. */
+export interface CoachMeal {
+  date?: string;
+  name: string;
+  meal_type: MealType;
+  time: string | null;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface CoachWeek {
+  from: string;
+  to: string;
+  days_logged: number;
+  days_in_range: number;
+  meals_logged: number;
+  /** Averaged over logged days only — see `days_logged`. */
+  average_per_logged_day: MacroTotals;
+  days_close_to_calorie_target: number;
+  target_tolerance_percent: number;
+  percent_of_logged_days_close_to_target: number | null;
+}
+
+export interface CoachStreak {
+  current_days: number;
+  longest_days: number;
+  logged_today: boolean;
+  total_days_logged: number;
+}
+
+/**
+ * The user's live nutrition context — exactly the figures the coach was given,
+ * so the progress card and the answers can never disagree.
+ */
+export interface CoachContext {
+  date: string;
+  weekday: string;
+  goal: string | null;
+  targets: MacroTotals | null;
+  consumed: MacroTotals;
+  remaining: MacroTotals | null;
+  percent_of_target: MacroTotals | null;
+  meals_logged_today: number;
+  today_meals: CoachMeal[];
+  streak: CoachStreak;
+  week: CoachWeek;
+  has_goal: boolean;
+  has_any_meals: boolean;
+  /**
+   * True when the server has no AI key and replies come from the offline
+   * driver. Returned by GET /ai-coach/context only.
+   */
+  is_simulated?: boolean;
+}
+
+export interface CoachMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  /** Short follow-up prompts, offered as chips. Assistant turns only. */
+  suggestions: string[];
+  ai_provider: string | null;
+  ai_model: string | null;
+  /** True when this reply came from the offline driver, not a model. */
+  is_simulated: boolean;
+  created_at: string | null;
+}
+
+export interface CoachConversation {
+  id: number;
+  /** Null until the first message names the thread. */
+  title: string | null;
+  message_count: number;
+  last_message_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** Present only when a single conversation was fetched. */
+  messages?: CoachMessage[];
+}
+
+export interface CoachReply {
+  user_message: CoachMessage;
+  reply: CoachMessage;
+  conversation: CoachConversation;
+  /** The context the answer was written from. */
+  context: CoachContext;
+}
+
+/** A computed one-liner about how a meal fits the day. No AI call involved. */
+export interface MealTip {
+  headline: string;
+  body: string;
+  tone: "positive" | "neutral" | "caution";
+}
+
+/* ---------------------------------------------------------------------------
    AI analysis
    --------------------------------------------------------------------------- */
 

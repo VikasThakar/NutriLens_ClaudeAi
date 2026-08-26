@@ -4,12 +4,16 @@ import type {
   DataEnvelope,
   Meal,
   MealListParams,
+  MealTip,
   MessageEnvelope,
   PaginatedEnvelope,
   StoreMealInput,
   TodaySummary,
   UpdateMealInput,
 } from "@/types/api";
+
+/** POST /meals also returns a computed NutriLens Tip alongside the meal. */
+type CreateMealResponse = MessageEnvelope<Meal> & { tip: MealTip };
 
 export const mealsService = {
   /**
@@ -46,7 +50,16 @@ export const mealsService = {
 
   /** Saves both reviewed AI analyses and manually entered meals. */
   create(input: StoreMealInput) {
-    return api.post<MessageEnvelope<Meal>>("/meals", input);
+    return api.post<CreateMealResponse>("/meals", input);
+  },
+
+  /**
+   * The NutriLens Tip for one meal — how it sits against the day's remaining
+   * targets. Computed server-side from the user's own figures, so this costs
+   * no AI call.
+   */
+  tip(id: number) {
+    return api.get<DataEnvelope<MealTip>>(`/meals/${id}/tip`);
   },
 
   update(id: number, input: UpdateMealInput) {

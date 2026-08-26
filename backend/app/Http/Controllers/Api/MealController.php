@@ -8,6 +8,7 @@ use App\Http\Requests\Meal\StoreMealRequest;
 use App\Http\Requests\Meal\UpdateMealRequest;
 use App\Http\Resources\MealResource;
 use App\Models\Meal;
+use App\Services\AI\MealTipService;
 use App\Services\MealService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,10 @@ use Illuminate\Validation\Rule;
 
 class MealController extends Controller
 {
-    public function __construct(private readonly MealService $meals)
-    {
+    public function __construct(
+        private readonly MealService $meals,
+        private readonly MealTipService $tips,
+    ) {
     }
 
     /**
@@ -83,7 +86,28 @@ class MealController extends Controller
         return response()->json([
             'message' => 'Meal saved.',
             'data' => MealResource::make($meal),
+            /*
+             * A one-line read on how this meal sits against the rest of the
+             * day. Computed, not generated: no AI call, no extra latency, no
+             * cost — see MealTipService.
+             */
+            'tip' => $this->tips->forMeal($request->user(), $meal),
         ], 201);
+    }
+
+    /**
+     * GET /api/meals/{meal}/tip
+     *
+     * The same NutriLens Tip, for the meal detail sheet. Separate from `show`
+     * so the meal list is not made to pay for a tip nobody is looking at.
+     */
+    public function tip(Request $request, Meal $meal): JsonResponse
+    {
+        $this->authorize('view', $meal);
+
+        return response()->json([
+            'data' => $this->tips->forMeal($request->user(), $meal),
+        ]);
     }
 
     /**

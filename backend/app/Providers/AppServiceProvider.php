@@ -4,24 +4,28 @@ namespace App\Providers;
 
 use App\Services\AI\Contracts\FoodNutritionEstimator;
 use App\Services\AI\Contracts\MealVisionAnalyzer;
+use App\Services\AI\Contracts\NutritionCoach;
 use App\Services\AI\Contracts\NutritionInsightGenerator;
 use App\Services\AI\Exceptions\AiConfigurationException;
 use App\Services\AI\Providers\AnthropicFoodEstimator;
 use App\Services\AI\Providers\AnthropicInsightGenerator;
 use App\Services\AI\Providers\AnthropicMealAnalyzer;
+use App\Services\AI\Providers\AnthropicNutritionCoach;
 use App\Services\AI\Providers\FakeFoodEstimator;
 use App\Services\AI\Providers\FakeInsightGenerator;
 use App\Services\AI\Providers\FakeMealAnalyzer;
+use App\Services\AI\Providers\FakeNutritionCoach;
 use App\Services\AI\Providers\OpenAiFoodEstimator;
 use App\Services\AI\Providers\OpenAiInsightGenerator;
 use App\Services\AI\Providers\OpenAiMealAnalyzer;
+use App\Services\AI\Providers\OpenAiNutritionCoach;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * NutriLens has three AI capabilities, each with one driver per provider.
-     * A single AI_PROVIDER value selects all three, so there is no way to end up
+     * NutriLens has four AI capabilities, each with one driver per provider.
+     * A single AI_PROVIDER value selects all four, so there is no way to end up
      * with a real vision model and a fake nutrition table.
      *
      * @var array<string, array<string, class-string>>
@@ -47,6 +51,14 @@ class AppServiceProvider extends ServiceProvider
             'anthropic' => AnthropicFoodEstimator::class,
             'openai' => OpenAiFoodEstimator::class,
             'fake' => FakeFoodEstimator::class,
+        ],
+
+        // A question plus the user's own live nutrition figures → an answer.
+        // Powers the AI Coach.
+        NutritionCoach::class => [
+            'anthropic' => AnthropicNutritionCoach::class,
+            'openai' => OpenAiNutritionCoach::class,
+            'fake' => FakeNutritionCoach::class,
         ],
     ];
 

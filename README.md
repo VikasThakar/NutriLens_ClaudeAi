@@ -35,6 +35,8 @@ MySQL — nutrilens_db
 | **Analytics** | Calories, protein, carbs and fat over 7 / 30 / 90 / 365 days. Averages, totals, meal count, and "days close to your target". Long ranges bucket by week. A table view of the same numbers. |
 | **Daily streaks** | Current and longest streak plus a 14-day activity strip. A day counts once, however many meals are on it. |
 | **Weekly AI insights** | A short written read on your week, generated from your own aggregates only, compared against the previous week when there is enough data. |
+| **NutriLens AI Coach** | A conversation that answers from your own logged data. Ask "what should I eat for dinner?" and it replies against your *actual* remaining calories and macros. Today's progress, quick actions, chat history in MySQL, and per-user rate limits. |
+| **NutriLens Tip** | A one-line read on how a saved meal sits against the rest of your day, shown the moment a meal is saved and on the meal detail sheet. Computed, not generated — no AI call, no cost, no latency. |
 | **Nutrition goals** | Daily calorie and macro targets, with full goal history. |
 | **Goal calculator** | Optional. Estimates targets from age, height, weight, activity level and goal using Mifflin-St Jeor. Explains why it asks for biological sex, and works without it. |
 | **Settings** | Profile, appearance (light / dark / system), nutrition goals, developer keys, sign out. |
@@ -59,6 +61,13 @@ every partner response, and a transparent, stated rule behind "days close to you
 target". Weekly insights are validated so that **every number in the generated
 prose must be traceable to the user's own aggregates** — an insight that invents a
 figure is discarded rather than shown.
+
+The AI Coach follows the same rule from the other direction: **every figure about
+the user is computed in PHP before the model sees it** — remaining macros,
+percentages of target, averages, the largest recent meal — and the prompt tells
+the model to quote those rather than derive them. General food knowledge is
+allowed, but only labelled as an estimate. If the coach was not given something,
+it says so instead of guessing.
 
 ---
 
@@ -108,6 +117,7 @@ frontend/
 │       ├── today/                   Dashboard
 │       ├── add-meal/                Capture → AI → review → save
 │       ├── meals/[id]/edit/
+│       ├── coach/                   AI Coach — chat over your own data
 │       ├── history/                 Day-by-day browsing
 │       ├── analytics/               Charts + summary + table
 │       ├── insights/                Weekly AI summaries
@@ -117,6 +127,8 @@ frontend/
 ├── components/
 │   ├── ui/                          shadcn/ui primitives
 │   ├── charts/                      Recharts wrappers, tooltip, sparkline
+│   ├── coach/                       Progress strip, quick actions, thread,
+│   │                                composer, conversation list, thinking state
 │   ├── dashboard/  history/  analytics/  insights/  developer/
 │   ├── add-meal/  meals/  goals/  settings/  layout/  marketing/  auth/
 ├── lib/
@@ -124,6 +136,7 @@ frontend/
 │   ├── meal-draft.ts                Portion scaling + macro locks
 │   ├── dates.ts                     Calendar-date helpers (local, not UTC)
 │   ├── nutrition.ts                 Macro palette + formatting
+│   ├── coach.ts                     Quick actions, thinking phrases, text blocks
 │   └── env.ts  confidence.ts  validations.ts  auth-storage.ts  navigation.ts
 ├── services/                        One typed module per API area
 ├── hooks/  types/
@@ -146,31 +159,35 @@ frontend/
 
 ```
 backend/app/
-├── Enums/                  ActivityLevel BiologicalSex GoalSource GoalType
+├── Enums/                  ActivityLevel BiologicalSex ChatRole GoalSource GoalType
 │                           MealType MealSource MealStatus PortionUnit AnalysisStatus
 ├── Http/
 │   ├── Controllers/Api/    First-party: Auth Dashboard Meal MealAnalysis MealImage
 │   │   │                   NutritionGoal GoalCalculator History Analytics Streak
-│   │   │                   WeeklyInsight ApiKey Onboarding User
+│   │   │                   WeeklyInsight AiCoach ApiKey Onboarding User
 │   │   └── V1/             Partner: PartnerNutrition PartnerStatus
 │   ├── Middleware/         AuthenticateApiKey
 │   ├── Requests/           One Form Request per write, per area
 │   └── Resources/          Meal MealItem NutritionGoal User WeeklyInsight ApiKey
+│                           AiConversation AiChatMessage
 ├── Models/                 User Meal MealItem MealImage NutritionGoal
-│                           WeeklyInsight ApiKey
+│                           WeeklyInsight ApiKey AiConversation AiChatMessage
 ├── OpenApi/                ApiDocumentation — spec root + shared schemas
-├── Policies/               MealPolicy NutritionGoalPolicy
+├── Policies/               MealPolicy NutritionGoalPolicy AiConversationPolicy
 ├── Providers/              AppServiceProvider (AI drivers) RateLimitServiceProvider
 ├── Services/
 │   ├── AI/
 │   │   ├── Contracts/      MealVisionAnalyzer NutritionInsightGenerator
-│   │   │                   FoodNutritionEstimator
-│   │   ├── Providers/      {Anthropic,OpenAi,Fake} × the three contracts
+│   │   │                   FoodNutritionEstimator NutritionCoach
+│   │   ├── Providers/      {Anthropic,OpenAi,Fake} × the four contracts
 │   │   ├── MealAnalysisService  + MealAnalysisPrompt  + MealImagePreparer
 │   │   ├── WeeklyInsightService + WeeklyInsightPrompt
 │   │   ├── FoodEstimationService + FoodEstimationPrompt
+│   │   ├── CoachService + CoachContextService + CoachPrompt
+│   │   ├── MealTipService  (rule-based; makes no AI call)
 │   │   ├── Data/           AnalyzedMeal AnalyzedFoodItem PreparedImage
 │   │   │                   FoodQuery WeeklyNutritionSummary GeneratedInsight
+│   │   │                   CoachContext
 │   │   └── Exceptions/     AiException hierarchy (status + user message)
 │   ├── Analytics/          DailyNutritionAggregator AnalyticsService StreakService
 │   ├── Goals/              GoalCalculatorService GoalEstimate
@@ -178,17 +195,32 @@ backend/app/
 └── Support/                PartnerApiResponse PartnerExceptionRenderer
 ```
 
-**The AI layer has three capabilities and three drivers each.** One
-`AI_PROVIDER` setting selects all three, so you can never end up with a real
-vision model and a fake nutrition table. Adding a provider means writing three
-classes and adding three lines to `AppServiceProvider::DRIVERS` — the prompts,
-JSON schemas and response validation are shared, so every provider is held to the
-same contract.
+**The AI layer has four capabilities and three drivers each.** One `AI_PROVIDER`
+setting selects all four, so you can never end up with a real vision model and a
+fake nutrition table. Adding a provider means writing four classes and adding
+four lines to `AppServiceProvider::DRIVERS` — the prompts, JSON schemas and
+response validation are shared, so every provider is held to the same contract.
+
+| Contract | Job |
+|---|---|
+| `MealVisionAnalyzer` | Meal photo → items, portions and macros |
+| `NutritionInsightGenerator` | A week of aggregates → a short written summary |
+| `FoodNutritionEstimator` | Named foods and portions → macros (partner API) |
+| `NutritionCoach` | A question + the user's own live figures → an answer |
 
 **Every AI response is re-validated server-side.** Schema, ranges, item caps, unit
 normalisation. For weekly insights there is an additional check that every number
-in the prose traces back to the supplied aggregates. A model that ignores the
-contract produces a 502, not a corrupt row.
+in the prose traces back to the supplied aggregates. Coach replies are checked for
+shape and for clinical overreach, and markdown is stripped before storage. A model
+that ignores the contract produces a 502, not a corrupt row.
+
+**The coach's context is a privacy boundary, not just a payload.**
+`CoachContextService` reads the caller's own rows and hands the model a
+`CoachContext` carrying nutrition figures, meal names and dates — and nothing
+else. No name, no email, no password hash, no tokens, no database ids, no photos,
+no body metrics. It reuses `AnalyticsService` and `StreakService` rather than
+recomputing them, so the coach cannot quote a number that disagrees with the
+Analytics screen.
 
 ---
 
@@ -196,7 +228,7 @@ contract produces a 502, not a corrupt row.
 
 Database name: **`nutrilens_db`** — it already exists; do not recreate it.
 
-16 migrations, all applied.
+18 migrations, all applied.
 
 | Table | Purpose |
 |---|---|
@@ -207,6 +239,8 @@ Database name: **`nutrilens_db`** — it already exists; do not recreate it.
 | `meal_images` | Uploaded photos: disk/path, analysis status, raw model payload. Private disk. |
 | `api_keys` | Partner keys: name, `key_prefix` (shown), `key_hash` (SHA-256, unique), abilities, `last_used_at`, `revoked_at`. |
 | `weekly_insights` | AI weekly summaries + the aggregates they were written from + `data_hash` for reuse. Unique per (user, week). |
+| `ai_conversations` | One AI Coach thread per row: `title` (derived from its first question), `last_message_at` and `message_count` denormalised so the chat list renders without touching the messages table. |
+| `ai_chat_messages` | One turn per row: `role` (`user` / `assistant`), `content`, the assistant's `suggestions`, and the `ai_provider` / `ai_model` that produced it. Ownership lives only on the conversation — there is no `user_id` here to drift out of step. |
 | `personal_access_tokens` | Sanctum tokens. |
 | `password_reset_tokens`, `sessions` | Laravel defaults. |
 | `cache`, `cache_locks`, `jobs`, `job_batches`, `failed_jobs` | Cache + queue (both `database`). |
@@ -243,6 +277,10 @@ Every user-owned table has a `user_id` foreign key with `ON DELETE CASCADE`.
 | `AI_ESTIMATION_MAX_TOKENS` | `4000` | |
 | `AI_ESTIMATION_EFFORT` | `low` | Anthropic only. |
 | `AI_ESTIMATION_MAX_ITEMS` | `20` | Max foods in one partner estimate request. |
+| `AI_COACH_MODEL` | *(empty)* | Blank = same as `AI_MODEL`. |
+| `AI_COACH_MAX_TOKENS` | `1200` | A coach reply is two or three short paragraphs. |
+| `AI_COACH_EFFORT` | `low` | Anthropic only. |
+| `AI_COACH_TIMEOUT` | `45` | Seconds. Deliberately below `AI_TIMEOUT`: someone waiting on a chat reply gives up long before 90s, so failing fast and offering a retry is better. |
 | `L5_SWAGGER_GENERATE_ALWAYS` | `true` | Regenerates the spec per page load. Set `false` in production. |
 | `L5_SWAGGER_UI_PERSIST_AUTHORIZATION` | `true` | Keeps a pasted key across Swagger reloads. |
 | `L5_SWAGGER_CONST_HOST` | `${APP_URL}` | The server URL shown in the spec. |
@@ -349,6 +387,12 @@ call and costs nothing. It is not a stub returning canned JSON:
   generic average **and say so, with a low confidence**.
 - Weekly insights are written from your actual aggregates, so every number in the
   text is real.
+- The AI Coach classifies your question — what to eat, protein, today's balance,
+  the week, your streak, your biggest meal — and answers it from your real
+  figures. Ask it for dinner with 580 kcal and 68 g of protein left and that is
+  what it talks about. Food quantities it cannot know are labelled as estimates,
+  and it says once per conversation that it is the offline coach rather than a
+  model, which the UI also badges.
 
 The whole product — including the partner API and Swagger — is demonstrable this
 way. To use a real model, set two values in `backend/.env`:
@@ -425,6 +469,8 @@ tests.
 | `POST /api/register`, `/api/login` | 10/min per IP |
 | `POST /api/meals/analyze` (first-party) | 20/min |
 | `POST /api/insights/generate` | 10/min |
+| `POST /api/ai-coach/conversations/{id}/messages` | 15/min, 150/day **per user** |
+| `POST /api/ai-coach/conversations` | 30/min per user |
 | `POST /api/api-keys` | 20/min |
 
 A `429` carries `Retry-After`.
@@ -603,6 +649,7 @@ server-to-server. An API key in browser JavaScript is a leaked API key.
 | `GET` | `/api/meals/{id}` | One meal with its items |
 | `PUT` | `/api/meals/{id}` | Update name, type, notes, items |
 | `DELETE` | `/api/meals/{id}` | Soft-delete a meal |
+| `GET` | `/api/meals/{id}/tip` | The NutriLens Tip for one meal (computed, no AI call) |
 | `GET` | `/api/meal-images/{id}/file` | Serve a meal photo (*signed URL, not Sanctum*) |
 | `GET` | `/api/history/day` | One day: totals, meals, nearest logged days either side |
 | `GET` | `/api/history/calendar` | Which days in a month have meals |
@@ -612,6 +659,12 @@ server-to-server. An API key in browser JavaScript is a leaked API key.
 | `GET` | `/api/insights/current` | One week's aggregates + stored summary + staleness |
 | `POST` | `/api/insights/generate` | Generate or reuse a weekly summary |
 | `GET` | `/api/insights/{id}` | One stored summary |
+| `GET` | `/api/ai-coach/context` | The caller's live nutrition context — the same object the coach is given. No AI call |
+| `GET` | `/api/ai-coach/conversations` | The caller's chat threads, newest activity first |
+| `POST` | `/api/ai-coach/conversations` | Start a thread (no AI call) |
+| `GET` | `/api/ai-coach/conversations/{id}` | One thread with all of its messages |
+| `DELETE` | `/api/ai-coach/conversations/{id}` | Delete a thread and its messages |
+| `POST` | `/api/ai-coach/conversations/{id}/messages` | Ask a question; stores the question and the reply together |
 | `GET` | `/api/api-keys` | The caller's partner keys |
 | `POST` | `/api/api-keys` | Create a key (returns the plaintext once) |
 | `DELETE` | `/api/api-keys/{id}` | Revoke a key |
@@ -621,19 +674,32 @@ server-to-server. An API key in browser JavaScript is a leaked API key.
 ## 12. Testing
 
 ```bash
-cd backend && php artisan test     # 196 tests, 1013 assertions
-cd frontend && npm run build       # 0 TypeScript errors, 18 routes
+cd backend && php artisan test     # 237 tests, 1221 assertions
+cd frontend && npm run build       # 0 TypeScript errors, 19 routes
 cd frontend && npm run lint        # 0 errors, 0 warnings
 ```
 
 The backend suite runs on in-memory SQLite and never touches `nutrilens_db`. It
 covers authentication and non-enumeration, per-token logout, meal CRUD and
-portion scaling, AI failure paths for all three capabilities, analytics with
+portion scaling, AI failure paths for all four capabilities, analytics with
 gaps and timezone boundaries, streak edge cases (month boundaries, grace day,
 soft deletes), weekly-insight reuse/staleness and the traceable-number
 validation, the goal calculator, API key lifecycle, the partner API including
 per-key rate limiting, and a dedicated security suite (mass assignment, secret
 leakage, upload traversal, cross-user reads).
+
+The AI Coach adds 31 tests of its own (`tests/Feature/AiCoachTest.php`): the
+context for a new user, a user with goals but no meals, and a user with history;
+that the context sent upstream contains no identity, credentials or ids; that
+another user's meals never reach it; conversation CRUD and per-user scoping;
+403s on reading, writing to and deleting someone else's thread; history replay
+and its cap; that a failed provider call leaves **no** orphaned user message, so
+retry cannot duplicate a question; a missing key, an empty answer and a clinical
+claim all being handled; markdown stripping and suggestion repair; the per-user
+rate limit including that a second account is unaffected; and the offline
+driver answering from real figures for each quick action. `MealTipTest.php` adds
+7 more, several of which point the app at a real provider with no key to prove
+the tip makes no AI call.
 
 ---
 
@@ -647,11 +713,14 @@ leakage, upload traversal, cross-user reads).
 > suite against anything but in-memory SQLite so the test suite can never touch
 > this database.
 
-1. **No real AI provider has been exercised.** The Anthropic and OpenAI drivers
-   were built against the installed SDK and documented wire formats but have
-   never run against a live endpoint — there is no key in this environment. The
-   `fake` driver and every validation and error path are fully tested. Your first
-   real call is the thing to watch; §8 explains the switch.
+1. **Only the Anthropic *coach* driver has run against a live endpoint.** With
+   `AI_PROVIDER=anthropic` and a real key, `AnthropicNutritionCoach` was verified
+   end to end — a first question and a follow-up, so both the single-turn and
+   the history-replay paths — and the replies quoted the user's real remaining
+   figures. The Anthropic vision/insight/estimation drivers and **all** of the
+   OpenAI drivers, including `OpenAiNutritionCoach`, are still built only against
+   the installed SDK and the documented wire formats. The `fake` driver and every
+   validation and error path are fully tested. §8 explains the switch.
 2. **`meals.consumed_on` is stamped at save time** from the user's stored
    timezone. Changing your timezone later does not re-bucket historical meals.
 3. **Analytics compares past days against your *current* targets**, not the
@@ -678,6 +747,25 @@ leakage, upload traversal, cross-user reads).
 10. **No mobile-device testing on real hardware.** Layouts were audited for
     overflow, touch-target size and safe-area handling, and every chart is
     responsive by construction, but nothing was verified on a physical phone.
+11. **The AI Coach has no streaming.** A reply arrives whole, after one request.
+    The thinking state names what the backend is actually doing rather than
+    faking a progress bar. Streaming would need SSE and a queue.
+12. **The coach replays a fixed window of ten messages**, each truncated to 1,200
+    characters. A long thread will eventually lose its early detail — the fresh
+    nutrition context is regenerated in full every turn regardless, which is the
+    part that has to be right.
+13. **"Your week" in the coach means the trailing seven days**, including today —
+    the same window as the dashboard trend, not the Monday-to-Sunday week that
+    Weekly Insights uses. The payload labels it `last_7_days`, and the coach
+    says "the last seven days" rather than "this week".
+14. **The mobile bottom bar now carries five tabs** instead of four. Every label
+    clears its own width at 360 px; below about 340 px "Analytics" truncates
+    rather than pushing the row sideways.
+15. **The NutriLens Tip is rule-based, not generated.** It reads the day's
+    remaining targets and picks one of five observations. That is a deliberate
+    trade — instant, free and exactly consistent with the numbers on screen —
+    but it will never be as nuanced as a sentence from a model. The coach is one
+    tap away when a sentence is not enough.
 
 ---
 

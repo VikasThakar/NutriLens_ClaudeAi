@@ -5,4 +5,5 @@ export { mealsService } from "./meals.service";
 export { historyService } from "./history.service";
 export { analyticsService } from "./analytics.service";
 export { insightsService } from "./insights.service";
+export { coachService } from "./coach.service";
 export { apiKeysService } from "./api-keys.service";

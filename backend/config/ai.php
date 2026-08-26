@@ -79,6 +79,25 @@ return [
         'max_items' => (int) (env('AI_ESTIMATION_MAX_ITEMS') ?: 20),
     ],
 
+    /**
+     * The NutriLens AI Coach — the conversational assistant on /coach.
+     *
+     * A separate block because the job is different again: a short answer over
+     * a small JSON context, with a few prior turns replayed. It wants a
+     * *shorter* timeout than the rest of the AI surface — a user waiting on a
+     * chat reply gives up long before the 90 seconds a photo analysis is
+     * allowed, so failing fast and offering a retry is the better experience.
+     *
+     * Leave AI_COACH_MODEL blank to use the same model as meal analysis.
+     */
+    'coach' => [
+        'model' => env('AI_COACH_MODEL') ?: null,
+        'max_tokens' => (int) (env('AI_COACH_MAX_TOKENS') ?: 1200),
+        /** low | medium | high | xhigh | max — Anthropic only. */
+        'effort' => env('AI_COACH_EFFORT') ?: 'low',
+        'timeout' => (float) (env('AI_COACH_TIMEOUT') ?: 45),
+    ],
+
     'providers' => [
 
         /*

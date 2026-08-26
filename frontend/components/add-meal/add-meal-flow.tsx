@@ -158,8 +158,15 @@ export function AddMealFlow() {
     setSaving(true);
 
     try {
-      await mealsService.create(draftToStoreInput(draft));
-      toast.success("Meal saved.");
+      const { tip } = await mealsService.create(draftToStoreInput(draft));
+
+      // The NutriLens Tip is computed server-side from the day's remaining
+      // targets, so it costs nothing to show it the moment the meal lands.
+      toast.success(tip ? `✨ ${tip.headline}` : "Meal saved.", {
+        description: tip?.body,
+        duration: tip ? 6000 : undefined,
+      });
+
       router.push("/today");
     } catch (caught) {
       if (caught instanceof ApiError) {

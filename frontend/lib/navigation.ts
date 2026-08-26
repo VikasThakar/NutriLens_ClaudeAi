@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import {
   BarChart3,
+  BotMessageSquare,
   CalendarDays,
   CameraIcon,
   Code2,
@@ -23,6 +24,7 @@ export interface AppNavItem {
 export const SIDEBAR_NAV: AppNavItem[] = [
   { label: "Today", href: "/today", icon: LayoutDashboard },
   { label: "Add Meal", href: "/add-meal", icon: CameraIcon },
+  { label: "AI Coach", href: "/coach", icon: BotMessageSquare },
   { label: "History", href: "/history", icon: CalendarDays },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Insights", href: "/insights", icon: Sparkles },
@@ -32,12 +34,13 @@ export const SIDEBAR_NAV: AppNavItem[] = [
 ];
 
 /**
- * Mobile bottom bar — five slots, with Add Meal deliberately in the middle
- * where a thumb naturally lands.
+ * Mobile bottom bar — Add Meal deliberately in the middle, where a thumb
+ * naturally lands, with the screens people return to either side of it.
  *
  * Settings is not one of them: it lives in the account menu in the top bar,
- * which frees the slot for Analytics — the screen a user actually opens
- * repeatedly.
+ * which frees a slot for a screen a user actually opens repeatedly. AI Coach
+ * sits immediately right of the centre — the closest tab to the thumb after
+ * the primary action, which is where the product's newest surface belongs.
  */
 export const BOTTOM_NAV_LEFT: AppNavItem[] = [
   { label: "Today", href: "/today", icon: LayoutDashboard },
@@ -45,6 +48,7 @@ export const BOTTOM_NAV_LEFT: AppNavItem[] = [
 ];
 
 export const BOTTOM_NAV_RIGHT: AppNavItem[] = [
+  { label: "Coach", href: "/coach", icon: BotMessageSquare },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Insights", href: "/insights", icon: Sparkles },
 ];

@@ -15,6 +15,7 @@ const PROTECTED_PREFIXES = [
   "/today",
   "/meals",
   "/add-meal",
+  "/coach",
   "/history",
   "/analytics",
   "/insights",
