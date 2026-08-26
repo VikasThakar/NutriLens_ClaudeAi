@@ -19,7 +19,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ConfidenceBadge } from "@/components/meals/confidence-badge";
 import type { Meal } from "@/types/api";
 
 /**
@@ -134,10 +133,6 @@ export function MealRow({
             kcal
           </span>
         </span>
-
-        {meal.source === "ai_photo" && meal.ai_confidence !== null && (
-          <ConfidenceBadge value={meal.ai_confidence} />
-        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger

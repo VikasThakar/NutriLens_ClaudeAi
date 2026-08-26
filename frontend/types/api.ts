@@ -367,6 +367,130 @@ export type GenerateInsightResponse =
     };
 
 /* ---------------------------------------------------------------------------
+   Smart Plate
+   --------------------------------------------------------------------------- */
+
+/** `ok` carries a score; the other two carry guidance instead. */
+export type SmartPlateStatus = "ok" | "no_goals" | "empty_meal";
+
+export type SmartPlateMacroStatus =
+  | "excellent"
+  | "good"
+  | "on_track"
+  | "high"
+  | "low"
+  | "needs_attention";
+
+export type SmartPlateRating =
+  | "excellent_fit"
+  | "great_fit"
+  | "good_fit"
+  | "fair_fit"
+  | "poor_fit";
+
+export type SmartPlateOptimizationId =
+  | "boost_protein"
+  | "reduce_calories"
+  | "balance_meal";
+
+export interface SmartPlateBreakdownRow {
+  status: SmartPlateMacroStatus;
+  /** Text label — never rely on colour alone to carry this. */
+  label: string;
+  message: string;
+}
+
+export interface SmartPlateDay {
+  date: string;
+  goal: string | null;
+  targets: MacroTotals | null;
+  consumed: MacroTotals;
+  /** Null when no goals are set. Negative values mean the target is passed. */
+  remaining: MacroTotals | null;
+  remaining_after_meal: MacroTotals | null;
+  is_first_meal_today: boolean;
+  meals_logged_today: number;
+}
+
+/**
+ * One concrete edit. `item_index` points into the items array that was sent, and
+ * `item_name` lets the client refuse a suggestion built against an older state.
+ */
+export type SmartPlateChange =
+  | {
+      action: "set_portion";
+      item_index: number;
+      item_name: string;
+      from_portion: number;
+      to_portion: number;
+      portion_unit: string;
+    }
+  | {
+      action: "add_item";
+      item_name: string;
+      portion_amount: number;
+      portion_unit: string;
+      /** e.g. "about 2 eggs", when grams are not how people think of it. */
+      portion_hint: string | null;
+      macros: MacroTotals;
+    };
+
+export interface SmartPlateOptimization {
+  id: SmartPlateOptimizationId;
+  title: string;
+  emoji: string;
+  /** False when this lever cannot help — `unavailable_reason` says why. */
+  applicable: boolean;
+  unavailable_reason: string | null;
+  description: string | null;
+  detail: string | null;
+  changes: SmartPlateChange[];
+  /** Warnings worth reading before applying, e.g. a locked macro. */
+  notes: string[];
+  macro_difference: MacroTotals | null;
+  projected_meal: MacroTotals | null;
+  current_score: number | null;
+  new_score: number | null;
+}
+
+export interface SmartPlateAnalysis {
+  status: SmartPlateStatus;
+  /** Set for `no_goals` and `empty_meal`. */
+  message: string | null;
+  meal: MacroTotals;
+  day: SmartPlateDay;
+  meal_fit_score: number | null;
+  rating: SmartPlateRating | null;
+  rating_label: string | null;
+  summary: string | null;
+  breakdown: Record<MacroField, SmartPlateBreakdownRow> | null;
+  optimizations: SmartPlateOptimization[];
+}
+
+export interface SmartPlateItemInput {
+  name: string;
+  portion_amount: number;
+  portion_unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  base_portion_amount: number | null;
+  base_calories: number | null;
+  base_protein: number | null;
+  base_carbs: number | null;
+  base_fat: number | null;
+  confidence: number | null;
+  locked_macros: MacroField[];
+}
+
+export interface SmartPlateInput {
+  /** The saved meal being edited, so its macros are not counted twice. */
+  meal_id?: number | null;
+  items: SmartPlateItemInput[];
+}
+
+/* ---------------------------------------------------------------------------
    AI Coach
    --------------------------------------------------------------------------- */
 

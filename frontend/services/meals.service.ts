@@ -7,6 +7,8 @@ import type {
   MealTip,
   MessageEnvelope,
   PaginatedEnvelope,
+  SmartPlateAnalysis,
+  SmartPlateInput,
   StoreMealInput,
   TodaySummary,
   UpdateMealInput,
@@ -60,6 +62,17 @@ export const mealsService = {
    */
   tip(id: number) {
     return api.get<DataEnvelope<MealTip>>(`/meals/${id}/tip`);
+  },
+
+  /**
+   * Smart Plate: how an **unsaved** meal fits the rest of today, and concrete
+   * ways to improve it.
+   *
+   * Stateless — the draft goes up, an analysis comes back, nothing is written —
+   * so it can run on every meaningful edit of the review screen.
+   */
+  smartPlate(input: SmartPlateInput) {
+    return api.post<DataEnvelope<SmartPlateAnalysis>>("/meals/smart-plate", input);
   },
 
   update(id: number, input: UpdateMealInput) {

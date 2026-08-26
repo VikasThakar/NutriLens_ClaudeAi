@@ -21,10 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ConfidenceBadge,
-  LowConfidenceNotice,
-} from "@/components/meals/confidence-badge";
 import type { MacroField } from "@/types/api";
 
 const MACRO_INPUTS: { field: MacroField; label: string; unit: string }[] = [
@@ -96,16 +92,13 @@ export function FoodItemCard({
         </Button>
       </div>
 
-      {/* Meta row */}
-      {(item.confidence !== null || itemIsDirty(item)) && (
+      {/* Meta row — only once the user has touched this item. */}
+      {itemIsDirty(item) && (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <ConfidenceBadge value={item.confidence} showPercent />
-          {itemIsDirty(item) && (
-            <span className="text-[0.6875rem] font-medium text-muted-foreground">
-              Edited
-            </span>
-          )}
-          {scalable && itemIsDirty(item) && (
+          <span className="text-[0.6875rem] font-medium text-muted-foreground">
+            Edited
+          </span>
+          {scalable && (
             <Button
               variant="ghost"
               size="xs"
@@ -118,8 +111,6 @@ export function FoodItemCard({
           )}
         </div>
       )}
-
-      <LowConfidenceNotice value={item.confidence} className="mt-2.5" />
 
       {/* Portion */}
       <div className="mt-4 grid grid-cols-[1fr_7.5rem] gap-2">

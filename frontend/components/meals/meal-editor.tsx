@@ -20,10 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormError } from "@/components/shared/form-message";
 import { FoodItemCard } from "@/components/meals/food-item-card";
-import {
-  AiDisclaimer,
-  ConfidenceBadge,
-} from "@/components/meals/confidence-badge";
+import { AiDisclaimer } from "@/components/meals/ai-disclaimer";
 import type { MacroField, MacroTotals, MealType } from "@/types/api";
 
 interface MealEditorProps {
@@ -38,6 +35,14 @@ interface MealEditorProps {
   submitLabel: string;
   title: string;
   description?: string;
+  /**
+   * Rendered between the food items and the totals bar — the point in the flow
+   * where the meal has been reviewed and is about to be saved.
+   *
+   * A slot rather than a prop bundle: the editor stays an editor, and does not
+   * need to know what Smart Plate is or which meal it is analysing.
+   */
+  smartPlate?: React.ReactNode;
 }
 
 export function MealEditor({
@@ -51,6 +56,7 @@ export function MealEditor({
   submitLabel,
   title,
   description,
+  smartPlate,
 }: MealEditorProps) {
   const totals = React.useMemo(() => draftTotals(draft.items), [draft.items]);
   const isAi = draft.ai_provider !== null;
@@ -99,12 +105,9 @@ export function MealEditor({
           </div>
 
           {isAi && (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <ConfidenceBadge value={draft.ai_confidence} showPercent />
-              <span className="text-[0.75rem] text-muted-foreground">
-                {draft.items.length} item{draft.items.length === 1 ? "" : "s"} detected
-              </span>
-            </div>
+            <p className="text-[0.75rem] text-muted-foreground">
+              {draft.items.length} item{draft.items.length === 1 ? "" : "s"} detected
+            </p>
           )}
 
           {isAi && draft.notes && (
@@ -216,6 +219,8 @@ export function MealEditor({
           Add Food Item
         </Button>
       </section>
+
+      {smartPlate}
 
       {/* Spacer so the sticky bar never covers the last field */}
       <div className="h-2" />

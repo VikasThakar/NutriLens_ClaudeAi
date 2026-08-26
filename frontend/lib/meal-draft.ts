@@ -171,6 +171,45 @@ export function draftFromAnalysis(
   };
 }
 
+/**
+ * A food item Smart Plate suggested adding.
+ *
+ * Its own values double as its baseline, so the moment it lands on the plate it
+ * behaves exactly like any other item: change the portion and the macros
+ * rescale. `is_ai_generated` stays false and it carries no confidence — the
+ * numbers come from NutriLens's own reference table, not from the vision model,
+ * and dressing them up as an AI estimate would misrepresent both.
+ */
+export function draftItemFromSuggestion(input: {
+  name: string;
+  portion_amount: number;
+  portion_unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}): DraftItem {
+  return {
+    key: nextKey(),
+    name: input.name,
+    portion_amount: formatPortion(input.portion_amount),
+    portion_unit: input.portion_unit,
+    calories: formatMacroValue("calories", input.calories),
+    protein: formatMacroValue("protein", input.protein),
+    carbs: formatMacroValue("carbs", input.carbs),
+    fat: formatMacroValue("fat", input.fat),
+    base_portion_amount: input.portion_amount,
+    base_calories: input.calories,
+    base_protein: input.protein,
+    base_carbs: input.carbs,
+    base_fat: input.fat,
+    confidence: null,
+    is_ai_generated: false,
+    was_edited: false,
+    locked_macros: [],
+  };
+}
+
 /** An empty manual meal. */
 export function draftForManualEntry(
   mealType: MealType,

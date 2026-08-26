@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/shared/page-header";
 import { MealEditor } from "@/components/meals/meal-editor";
+import { SmartPlatePanel } from "@/components/meals/smart-plate-panel";
 
 export function EditMealScreen({ mealId }: { mealId: number }) {
   const router = useRouter();
@@ -145,6 +146,18 @@ export function EditMealScreen({ mealId }: { mealId: number }) {
         saving={saving}
         submitLabel="Save changes"
         title="Meal details"
+        /*
+          `mealId` matters here: this meal is already in today's totals, so
+          without it Smart Plate would measure the edit against a day that
+          already contains it and every portion would look doubled.
+        */
+        smartPlate={
+          <SmartPlatePanel
+            draft={draft}
+            onDraftChange={setDraft}
+            mealId={mealId}
+          />
+        }
       />
     </div>
   );

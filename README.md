@@ -35,6 +35,7 @@ MySQL — nutrilens_db
 | **Analytics** | Calories, protein, carbs and fat over 7 / 30 / 90 / 365 days. Averages, totals, meal count, and "days close to your target". Long ranges bucket by week. A table view of the same numbers. |
 | **Daily streaks** | Current and longest streak plus a 14-day activity strip. A day counts once, however many meals are on it. |
 | **Weekly AI insights** | A short written read on your week, generated from your own aggregates only, compared against the previous week when there is enough data. |
+| **NutriLens Smart Plate** | On the review screen, before you save: how well this meal fits what is *left* of today. A 0–10 Meal Fit Score with a per-macro breakdown, and three optimizations — Boost Protein, Reduce Calories, Balance Meal — each simulated, re-scored, and applied through the existing portion-scaling and macro-lock rules, with Undo. Entirely deterministic; no AI call. |
 | **NutriLens AI Coach** | A conversation that answers from your own logged data. Ask "what should I eat for dinner?" and it replies against your *actual* remaining calories and macros. Today's progress, quick actions, chat history in MySQL, and per-user rate limits. |
 | **NutriLens Tip** | A one-line read on how a saved meal sits against the rest of your day, shown the moment a meal is saved and on the meal detail sheet. Computed, not generated — no AI call, no cost, no latency. |
 | **Nutrition goals** | Daily calorie and macro targets, with full goal history. |
@@ -55,12 +56,18 @@ MySQL — nutrilens_db
 
 ### Design and honesty
 
-Values are **estimates**, and the product says so wherever they appear:
-confidence bands per item, a disclaimer on every AI meal, a disclaimer field in
-every partner response, and a transparent, stated rule behind "days close to your
-target". Weekly insights are validated so that **every number in the generated
-prose must be traceable to the user's own aggregates** — an insight that invents a
-figure is discarded rather than shown.
+Values are **estimates**, and the product says so: a disclaimer on every AI meal,
+a disclaimer field in every partner response, and a transparent, stated rule
+behind "days close to your target". Weekly insights are validated so that **every
+number in the generated prose must be traceable to the user's own aggregates** —
+an insight that invents a figure is discarded rather than shown.
+
+Said **once**, though. Per-item confidence chips ("Estimated 72%", "Needs review
+50%") and low-confidence warnings used to sit on every food row and were removed:
+on a screen whose entire purpose is "check these numbers and correct them", a
+percentage on each line was noise that told nobody what to do about it. The
+confidence values are still analysed, stored and returned by the API — the UI
+just carries one honest sentence instead of a dozen hedges.
 
 The AI Coach follows the same rule from the other direction: **every figure about
 the user is computed in PHP before the model sees it** — remaining macros,
@@ -68,6 +75,11 @@ percentages of target, averages, the largest recent meal — and the prompt tell
 the model to quote those rather than derive them. General food knowledge is
 allowed, but only labelled as an estimate. If the coach was not given something,
 it says so instead of guessing.
+
+Smart Plate goes further and calls no model at all. Its score, its statuses and
+its suggestions are arithmetic over the user's own rows, and each suggestion is
+**simulated and re-scored before it is offered** — so one that would not actually
+help is never shown, and the number it promises is the number you get.
 
 ---
 
@@ -129,15 +141,18 @@ frontend/
 │   ├── charts/                      Recharts wrappers, tooltip, sparkline
 │   ├── coach/                       Progress strip, quick actions, thread,
 │   │                                composer, conversation list, thinking state
+│   ├── meals/                       Editor, food item card, detail sheet,
+│   │                                NutriLens Tip, Smart Plate panel
 │   ├── dashboard/  history/  analytics/  insights/  developer/
-│   ├── add-meal/  meals/  goals/  settings/  layout/  marketing/  auth/
+│   ├── add-meal/  goals/  settings/  layout/  marketing/  auth/
 ├── lib/
 │   ├── api-client.ts                The one place that calls fetch
 │   ├── meal-draft.ts                Portion scaling + macro locks
+│   ├── smart-plate.ts               Request shaping, applying a suggestion
 │   ├── dates.ts                     Calendar-date helpers (local, not UTC)
 │   ├── nutrition.ts                 Macro palette + formatting
 │   ├── coach.ts                     Quick actions, thinking phrases, text blocks
-│   └── env.ts  confidence.ts  validations.ts  auth-storage.ts  navigation.ts
+│   └── env.ts  validations.ts  auth-storage.ts  navigation.ts
 ├── services/                        One typed module per API area
 ├── hooks/  types/
 └── proxy.ts                         Server-side route protection
@@ -190,6 +205,12 @@ backend/app/
 │   │   │                   CoachContext
 │   │   └── Exceptions/     AiException hierarchy (status + user message)
 │   ├── Analytics/          DailyNutritionAggregator AnalyticsService StreakService
+│   ├── Nutrition/          Smart Plate — no AI involved
+│   │   ├── SmartPlateService   orchestration + prose
+│   │   ├── MealFitScore        the 0–10 score, four weighted components
+│   │   ├── PlateOptimizer      propose → simulate → score → keep the best
+│   │   ├── FoodNutritionTable  shared per-100g reference + unit weights
+│   │   └── Data/               PlateItem PlateMeal PlateScore
 │   ├── Goals/              GoalCalculatorService GoalEstimate
 │   ├── MealService  NutritionGoalService  ApiKeyService
 └── Support/                PartnerApiResponse PartnerExceptionRenderer
@@ -213,6 +234,22 @@ normalisation. For weekly insights there is an additional check that every numbe
 in the prose traces back to the supplied aggregates. Coach replies are checked for
 shape and for clinical overreach, and markdown is stripped before storage. A model
 that ignores the contract produces a 502, not a corrupt row.
+
+**Smart Plate is the one AI-adjacent feature that calls no model.** It works
+because two implementations of one rule agree: `PlateItem::withPortion()` in PHP
+reproduces `setItemPortion()` in TypeScript exactly — same baseline, same
+locked-macro rule, same rounding. That equivalence is what lets the backend
+promise "+31 g of protein" and have it still be true after the user taps Apply,
+and it is asserted directly in `SmartPlateTest` by replaying every suggestion
+through an independent implementation of the frontend's rules and re-analysing
+the result.
+
+The suggestions themselves contain no hand-written food rules. "Reduce the rice
+rather than the chicken" is nowhere in the code — it falls out of scoring both
+candidates, because cutting the chicken costs protein and the score notices. The
+two places the score *is* overridden are documented constraints: an item with
+hand-locked calories is never proposed for an increase (the cost would be
+invisible), and nothing is ever added to a meal already materially over budget.
 
 **The coach's context is a privacy boundary, not just a payload.**
 `CoachContextService` reads the caller's own rows and hands the model a
@@ -471,6 +508,7 @@ tests.
 | `POST /api/insights/generate` | 10/min |
 | `POST /api/ai-coach/conversations/{id}/messages` | 15/min, 150/day **per user** |
 | `POST /api/ai-coach/conversations` | 30/min per user |
+| `POST /api/meals/smart-plate` | 90/min per user (no AI call — a runaway-client backstop) |
 | `POST /api/api-keys` | 20/min |
 
 A `429` carries `Retry-After`.
@@ -650,6 +688,7 @@ server-to-server. An API key in browser JavaScript is a leaked API key.
 | `PUT` | `/api/meals/{id}` | Update name, type, notes, items |
 | `DELETE` | `/api/meals/{id}` | Soft-delete a meal |
 | `GET` | `/api/meals/{id}/tip` | The NutriLens Tip for one meal (computed, no AI call) |
+| `POST` | `/api/meals/smart-plate` | Smart Plate: analyse an **unsaved** meal against what is left of today, with optimizations. Stateless, no AI call |
 | `GET` | `/api/meal-images/{id}/file` | Serve a meal photo (*signed URL, not Sanctum*) |
 | `GET` | `/api/history/day` | One day: totals, meals, nearest logged days either side |
 | `GET` | `/api/history/calendar` | Which days in a month have meals |
@@ -674,7 +713,7 @@ server-to-server. An API key in browser JavaScript is a leaked API key.
 ## 12. Testing
 
 ```bash
-cd backend && php artisan test     # 237 tests, 1221 assertions
+cd backend && php artisan test     # 269 tests, 1379 assertions
 cd frontend && npm run build       # 0 TypeScript errors, 19 routes
 cd frontend && npm run lint        # 0 errors, 0 warnings
 ```
@@ -700,6 +739,20 @@ rate limit including that a second account is unaffected; and the offline
 driver answering from real figures for each quick action. `MealTipTest.php` adds
 7 more, several of which point the app at a real provider with no key to prove
 the tip makes no AI call.
+
+Smart Plate adds 30 (`tests/Feature/SmartPlateTest.php`), with
+`Http::preventStrayRequests()` on throughout so a provider call would fail the
+suite outright. They cover a balanced meal, a high-protein one, and low-protein,
+high-calorie, high-carb and high-fat ones; the first meal of the day; a user with
+no goals; an empty draft; a hand-entered meal with no baseline; low-confidence
+input scoring identically to high-confidence input, since confidence is carried
+but is not scored; editing a saved meal without double-counting it; the determinism of the
+score; every suggestion landing on the macros and score it promised once replayed
+through an independent implementation of the frontend's scaling rules;
+recalculation after applying; locked macros, including that an item with locked
+calories is never grown and one locked everywhere is never rescaled; the
+over-budget constraint; portion sanity bounds; numeric validation; and that
+another account's meal id gives a 404 rather than leaking its macros.
 
 ---
 
@@ -766,6 +819,33 @@ the tip makes no AI call.
     trade — instant, free and exactly consistent with the numbers on screen —
     but it will never be as nuanced as a sentence from a model. The coach is one
     tap away when a sentence is not enough.
+16. **Smart Plate makes no AI call, by choice.** The brief allowed the provider
+    to be used to reword suggestions; it is not, because the deterministic copy
+    already carries the exact figures a model would have been handed, and adding
+    a paid, one-to-three-second round trip to a panel that re-runs on every edit
+    would make the feature worse. The consequence is that its prose is
+    templated, and it does not comment on food quality, cooking method or
+    anything beyond the four macros.
+17. **Smart Plate can only add from a curated list of twelve foods.** They are
+    keyed into the shared per-100g reference table and chosen for diet coverage
+    (chicken, tuna, white fish, prawns, eggs, Greek yoghurt, cottage cheese,
+    paneer, tofu, lentils, a protein shake, plus broccoli and salad for volume).
+    Anything outside that list has to be added by hand.
+18. **A suggested portion change assumes macros scale linearly with the
+    portion.** That is the same assumption the existing portion input makes, and
+    it is right for a weight or a volume; for "1 plate" or "1 serving" it is
+    only as good as the original estimate of what that portion was.
+19. **Smart Plate compares against today's *current* targets**, like Analytics.
+    Editing a meal from last week scores it against the goals you hold now.
+20. **Undo is one level per applied suggestion and does not survive leaving the
+    screen.** It also clears itself the moment you edit an item by hand after
+    applying — restoring a snapshot would otherwise silently discard your own
+    change. Nothing is persisted until you save, so leaving the review screen
+    discards the whole draft as it always has.
+21. **The score is a fit measure, not a nutrition verdict.** It answers "how
+    well does this meal use what is left of today's targets", which is a
+    question about arithmetic. It knows nothing about fibre, micronutrients,
+    sodium, or whether a meal is a good idea.
 
 ---
 

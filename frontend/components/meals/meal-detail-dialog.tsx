@@ -17,7 +17,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { ConfidenceBadge, AiDisclaimer } from "@/components/meals/confidence-badge";
+import { AiDisclaimer } from "@/components/meals/ai-disclaimer";
 import { MealTipCard } from "@/components/meals/nutrilens-tip";
 import type { Meal } from "@/types/api";
 
@@ -95,10 +95,6 @@ function MealDetail({ meal, onClose }: { meal: Meal; onClose: () => void }) {
                 )}
               </SheetDescription>
             </div>
-
-            {meal.source === "ai_photo" && (
-              <ConfidenceBadge value={meal.ai_confidence} showPercent />
-            )}
           </div>
         </header>
 
@@ -161,14 +157,9 @@ function MealDetail({ meal, onClose }: { meal: Meal; onClose: () => void }) {
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-end gap-1">
-                    <span className="text-[0.8125rem] font-semibold tabular-nums">
-                      {formatCalories(item.calories)}
-                    </span>
-                    {item.is_ai_generated && (
-                      <ConfidenceBadge value={item.confidence} />
-                    )}
-                  </div>
+                  <span className="shrink-0 text-[0.8125rem] font-semibold tabular-nums">
+                    {formatCalories(item.calories)}
+                  </span>
                 </li>
               ))}
             </ul>

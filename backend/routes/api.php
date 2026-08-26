@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\MealController;
 use App\Http\Controllers\Api\MealImageController;
 use App\Http\Controllers\Api\NutritionGoalController;
 use App\Http\Controllers\Api\OnboardingController;
+use App\Http\Controllers\Api\SmartPlateController;
 use App\Http\Controllers\Api\StreakController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\V1\PartnerNutritionController;
@@ -157,6 +158,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // The NutriLens Tip for one meal. No AI call — see MealTipService.
     Route::get('/meals/{meal}/tip', [MealController::class, 'tip']);
+
+    /*
+    | Smart Plate. Analyses an *unsaved* meal against the caller's remaining
+    | targets and proposes optimizations. Pure arithmetic over data we already
+    | have — no AI call, nothing written — so the limit is generous: it runs on
+    | every meaningful edit of the review screen and exists only to stop a
+    | runaway client.
+    */
+    Route::post('/meals/smart-plate', [SmartPlateController::class, 'store'])
+        ->middleware('throttle:smart-plate');
 
     Route::apiResource('meals', MealController::class);
 

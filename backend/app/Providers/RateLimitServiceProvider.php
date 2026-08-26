@@ -68,6 +68,15 @@ class RateLimitServiceProvider extends ServiceProvider
         // stop an empty conversation being created in a loop.
         RateLimiter::for('ai-coach-threads', fn (Request $request) => Limit::perMinute(30)
             ->by($this->userKey($request)));
+
+        /*
+         * Smart Plate. No provider call and no writes — a couple of indexed
+         * reads and some arithmetic — and it re-runs on every meaningful edit
+         * of the meal review screen. The limit is therefore generous by design:
+         * it is a backstop against a runaway client, not a cost control.
+         */
+        RateLimiter::for('smart-plate', fn (Request $request) => Limit::perMinute(90)
+            ->by($this->userKey($request)));
     }
 
     /**

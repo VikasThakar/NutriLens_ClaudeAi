@@ -17,6 +17,7 @@ import { mealsService } from "@/services";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { PageHeader } from "@/components/shared/page-header";
 import { MealEditor } from "@/components/meals/meal-editor";
+import { SmartPlatePanel } from "@/components/meals/smart-plate-panel";
 import {
   MealPhotoPicker,
   type PhotoSelection,
@@ -259,6 +260,9 @@ export function AddMealFlow() {
             formError={formError}
             saving={saving}
             submitLabel="Save Meal"
+            // Smart Plate sits after the items and before Save: the meal has
+            // been reviewed, and this is where it is worth asking how it fits.
+            smartPlate={<SmartPlatePanel draft={draft} onDraftChange={setDraft} />}
             title={draft.ai_provider ? "AI analysis" : "Meal details"}
             description={
               draft.ai_provider
