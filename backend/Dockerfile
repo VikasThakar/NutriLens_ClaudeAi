@@ -47,6 +47,11 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh    /usr/local/bin/entrypoint
 RUN chmod +x /usr/local/bin/entrypoint
 
+# nginx workers run as www-data (see docker/nginx.conf), but the Alpine package
+# ships /var/lib/nginx owned by `nginx`. Without this, spooling an upload to
+# disk fails with EACCES and nginx answers 500 before PHP is ever reached.
+RUN mkdir -p /var/lib/nginx/tmp/client_body /var/lib/nginx/tmp/fastcgi /var/lib/nginx/tmp/proxy /var/lib/nginx/tmp/uwsgi /var/lib/nginx/tmp/scgi /var/log/nginx && chown -R www-data:www-data /var/lib/nginx /var/log/nginx
+
 RUN chown -R www-data:www-data /app
 
 # php:8.2-fpm-alpine carries an inherited `EXPOSE 9000` for php-fpm's FastCGI

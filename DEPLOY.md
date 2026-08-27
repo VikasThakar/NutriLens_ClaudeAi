@@ -261,6 +261,14 @@ scheme included, no trailing slash.
 was added after the build. Redeploy the frontend; the value is compiled in, not
 read at runtime.
 
+**Photo upload fails with a CORS error, but everything else works** — check the
+backend deploy log for `open() "/var/lib/nginx/tmp/client_body/..." failed (13:
+Permission denied)`. nginx spools request bodies over `client_body_buffer_size`
+to disk, so only uploads hit it; small JSON requests never touch the path. The
+browser reports it as CORS because nginx answers 500 itself and Laravel — which
+adds the CORS headers — never runs. The Dockerfile chowns those directories to
+`www-data`.
+
 **Meal photos 404 after a redeploy** — the volume is missing, or mounted
 somewhere other than `/app/storage`.
 

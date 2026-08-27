@@ -62,6 +62,12 @@ php artisan l5-swagger:generate >/dev/null 2>&1 \
 # Last, because every artisan command above ran as root and left root-owned
 # files (the log, the compiled config) behind. php-fpm runs as www-data.
 chown -R www-data:www-data storage bootstrap/cache
+
+# nginx recreates any missing temp directory as root at startup, which would
+# lock out the www-data workers again. Re-asserting ownership here costs
+# nothing and keeps an upload from failing with EACCES half a boot later.
+mkdir -p /var/lib/nginx/tmp/client_body /var/lib/nginx/tmp/fastcgi
+chown -R www-data:www-data /var/lib/nginx /var/log/nginx
 chmod -R ug+rwX storage bootstrap/cache
 
 echo "[entrypoint] starting php-fpm + nginx"
