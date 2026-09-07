@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
+import { Figtree } from "next/font/google";
 
 import { LegalPage } from "@/components/marketing/legal-page";
+
+/**
+ * This page is set in Figtree rather than the product's Geist. Re-declaring
+ * --font-sans scopes the swap to the subtree the class is applied to, so both
+ * `font-sans` and `font-heading` (which resolves to --font-sans) pick it up.
+ */
+const figtree = Figtree({
+  variable: "--font-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Terms",
@@ -9,7 +21,11 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" updated="25 August 2026">
+    <LegalPage
+      title="Terms of Service"
+      updated="25 August 2026"
+      className={`${figtree.variable} font-sans`}
+    >
       <section>
         <h2>Not medical advice</h2>
         <p>
