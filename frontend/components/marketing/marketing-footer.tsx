@@ -33,7 +33,6 @@ const COLUMNS: { heading: string; links: FooterLink[] }[] = [
     links: [
       { label: "Privacy", route: "/privacy" },
       { label: "Terms", route: "/terms" },
-      { label: "Consent", route: "/consent" },
     ],
   },
 ];
