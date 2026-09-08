@@ -5,7 +5,7 @@ import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingNav } from "@/components/marketing/marketing-nav";
 
 /**
- * Shared shell for the Privacy / Terms pages. Content
+ * Shared shell for the Privacy / Terms / Consent pages. Content
  * is intentionally short — these exist so no footer link is broken, and so real
  * policy copy has a home.
  *
