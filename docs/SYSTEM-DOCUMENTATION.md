@@ -285,7 +285,7 @@ The system has **two authenticated principals** and one unauthenticated visitor.
 
 | User Role | Description | Main Responsibilities | Permissions | Main Features Used |
 |---|---|---|---|---|
-| **Visitor** (unauthenticated) | Anyone who has not signed in | Evaluate the product; register | Landing page, `/terms`, `/privacy`, `POST /api/register`, `POST /api/login`, `GET /api/health` | Marketing landing page |
+| **Visitor** (unauthenticated) | Anyone who has not signed in | Evaluate the product; register | Landing page, `/terms`, `/privacy`, `/consent`, `POST /api/register`, `POST /api/login`, `GET /api/health` | Marketing landing page |
 | **Registered User** | An individual tracking their own nutrition | Log meals, maintain goals, review AI output | Full CRUD on **their own** meals, goals, insights, conversations and API keys. **No access to any other user's data.** | Dashboard, Add Meal, History, Analytics, Insights, Coach, Goals, Settings, Developer |
 | **Partner Application** (machine) | A third-party system holding an `nl_live_` API key | Send photos or food lists; receive nutrition data | **Only** `/api/v1/*`. Cannot read or write *any* user data — including the data of the user who owns the key | `POST /v1/nutrition/analyze`, `POST /v1/nutrition/estimate`, `GET /v1/ping` |
 
@@ -833,7 +833,7 @@ flowchart TB
 frontend/
 ├── app/
 │   ├── page.tsx                  Landing page (public)
-│   ├── privacy/  terms/          Public legal pages
+│   ├── privacy/  terms/  consent/  Public legal pages
 │   ├── (auth)/                   login · register · forgot-password
 │   ├── onboarding/               Goal setup — post-registration
 │   └── (app)/                    Authenticated shell: sidebar + bottom nav
@@ -866,7 +866,7 @@ frontend/
 | Route | Group | Access | Purpose |
 |---|---|---|---|
 | `/` | — | Public | Marketing landing page |
-| `/terms`, `/privacy` | — | Public | Legal |
+| `/terms`, `/privacy`, `/consent` | — | Public | Legal |
 | `/login`, `/register` | `(auth)` | Guest-only | Authentication |
 | `/forgot-password` | `(auth)` | Guest-only | **See §26 — no backend endpoint exists** |
 | `/onboarding` | — | Protected | Goal setup |
