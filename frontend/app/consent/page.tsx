@@ -17,8 +17,7 @@ export default function ConsentPage() {
           NutriLens estimates nutrition with an AI model. That means some of what
           you enter leaves our servers and is sent to a third-party model
           provider. This page states exactly which data that is, which features
-          cause it, and how to stop it. What we store, and for how long, is
-          covered separately in Privacy.
+          cause it, and how to stop it.
         </p>
       </section>
 
