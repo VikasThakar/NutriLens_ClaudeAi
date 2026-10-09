@@ -184,10 +184,6 @@ export function RegisterForm() {
         By creating an account you agree to our{" "}
         <Link href="/terms" className="text-foreground hover:underline">
           Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="text-foreground hover:underline">
-          Privacy Policy
         </Link>
         .
       </p>
